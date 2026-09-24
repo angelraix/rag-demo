@@ -105,20 +105,34 @@ def _diversify_by_period(docs: list, metas: list, target: int) -> tuple:
     return [d for d, _ in combined], [m for _, m in combined]
 
 
+def _query_one(question: str, where: dict, n: int) -> tuple:
+    """Run a single Chroma query and return (docs, metas)."""
+    kwargs: dict = dict(query_texts=[question], n_results=n, include=["documents", "metadatas"])
+    if where:
+        kwargs["where"] = where
+    results = _collection.query(**kwargs)
+    return results["documents"][0], results["metadatas"][0]
+
+
 def retrieve(question: str, customer_ids: list) -> tuple:
     """Embed the query and pull top-k chunks per company from Chroma, with temporal diversity."""
-    target     = MAX_CHUNKS if not customer_ids else min(TOP_K * len(customer_ids), MAX_CHUNKS)
-    n_fetch    = min(target * 2, 50)   # fetch extra candidates for diversity re-ranking
-    kwargs: dict = dict(
-        query_texts=[question],
-        n_results=n_fetch,
-        include=["documents", "metadatas"],
-    )
-    if customer_ids:
-        kwargs["where"] = {"customer_id": {"$in": customer_ids}} if len(customer_ids) > 1 else {"customer_id": customer_ids[0]}
-    results    = _collection.query(**kwargs)
-    docs, metas = results["documents"][0], results["metadatas"][0]
-    return _diversify_by_period(docs, metas, target)
+    if not customer_ids:
+        # No filter — search full corpus
+        docs, metas = _query_one(question, {}, min(MAX_CHUNKS * 2, 50))
+        return _diversify_by_period(docs, metas, MAX_CHUNKS)
+
+    if len(customer_ids) == 1:
+        docs, metas = _query_one(question, {"customer_id": customer_ids[0]}, TOP_K * 2)
+        return _diversify_by_period(docs, metas, TOP_K)
+
+    # Multiple companies — query each separately to guarantee representation
+    all_docs, all_metas = [], []
+    for cid in customer_ids:
+        d, m = _query_one(question, {"customer_id": cid}, TOP_K * 2)
+        d, m = _diversify_by_period(d, m, TOP_K)
+        all_docs.extend(d)
+        all_metas.extend(m)
+    return all_docs, all_metas
 
 
 def build_context(docs: list, metas: list) -> str:
