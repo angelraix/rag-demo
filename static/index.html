@@ -46,14 +46,14 @@
     }
     nav a {
       text-decoration: none;
-      color: var(--muted);
+      color: transparent;
       font-size: 14px;
       padding: 6px 14px;
       border-radius: 6px;
-      transition: color .15s, background .15s;
+      transition: color .2s, background .2s;
     }
     nav a:hover  { color: var(--text); background: var(--border); }
-    nav a.active { color: var(--text); background: var(--border); }
+    nav a.active { color: var(--muted); background: var(--border); }
 
     /* ── Layout ── */
     main {
@@ -136,6 +136,26 @@
       font-family: inherit;
     }
     .company-search:focus { border-color: var(--accent); }
+    .sector-pills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-bottom: 6px;
+    }
+    .sector-pill {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 600;
+      padding: 3px 10px;
+      cursor: pointer;
+      transition: border-color .15s, color .15s;
+      user-select: none;
+    }
+    .sector-pill:hover { border-color: var(--accent-hi); color: var(--text); }
+    .sector-pill.active { border-color: var(--accent); color: var(--accent-hi); }
     .company-list {
       max-height: 160px;
       overflow-y: auto;
@@ -271,14 +291,15 @@
     <div class="controls">
       <div class="field" style="flex:1; min-width:180px;">
         <label>Companies <span id="sel-count" style="font-weight:400; color:var(--accent-hi); text-transform:none; letter-spacing:0;"></span></label>
-        <input class="company-search" id="company-search" type="text" placeholder="Filter…" oninput="filterCompanies()">
+        <div class="sector-pills" id="sector-pills"></div>
+        <input class="company-search" id="company-search" type="text" placeholder="Filter companies…" oninput="filterCompanies()">
         <div class="company-list" id="company-list"></div>
       </div>
     </div>
 
     <div class="field" style="margin-bottom:0">
       <label>Question</label>
-      <textarea id="question" placeholder="What are the key risk factors for this company?"></textarea>
+      <textarea id="question" placeholder="Ask anything — select companies above to scope, or leave blank to search all filings."></textarea>
     </div>
 
     <div class="btn-row">
@@ -296,7 +317,47 @@
 </main>
 
 <script>
+  const SECTORS = {
+    "Tech":       ["aapl","msft","goog","meta","nvda","amd","intc","adbe","crm","csco","orcl","ibm","amzn"],
+    "Finance":    ["jpm","bac","gs","ms","blk","v","ma","axp","brk"],
+    "Healthcare": ["jnj","pfe","mrk","lly","unh","abbv","tmo"],
+    "Consumer":   ["wmt","cost","tgt","mcd","sbux","nke","ko","pep","pg","hd"],
+    "Media":      ["dis","nflx","cmcsa"],
+    "Energy":     ["xom","cvx"],
+    "Industrial": ["cat","ba","ge","rtx","lmt","de","ups","tsla"],
+    "Telecom":    ["t","vz"],
+  };
+
+  let _activeSector = null;
   let _allCustomers = [];
+
+  // ── Sector pills ──
+  function buildSectorPills() {
+    const container = document.getElementById("sector-pills");
+    Object.keys(SECTORS).forEach(sector => {
+      const pill = document.createElement("span");
+      pill.className = "sector-pill";
+      pill.textContent = sector;
+      pill.addEventListener("click", () => {
+        if (_activeSector === sector) {
+          // toggle off — clear selection
+          _activeSector = null;
+          document.querySelectorAll(".sector-pill").forEach(p => p.classList.remove("active"));
+          document.querySelectorAll("#company-list input").forEach(cb => { cb.checked = false; });
+        } else {
+          _activeSector = sector;
+          document.querySelectorAll(".sector-pill").forEach(p => p.classList.remove("active"));
+          pill.classList.add("active");
+          const tickers = new Set(SECTORS[sector]);
+          document.querySelectorAll("#company-list input").forEach(cb => {
+            cb.checked = tickers.has(cb.value);
+          });
+        }
+        updateCount();
+      });
+      container.appendChild(pill);
+    });
+  }
 
   // ── Load customers from server ──
   async function loadCustomers() {
@@ -305,6 +366,7 @@
       const { customers } = await res.json();
       _allCustomers = customers;
       renderCompanies(customers);
+      buildSectorPills();
     } catch(e) {
       console.error("Could not load customers", e);
     }
@@ -315,7 +377,7 @@
     const checked = new Set(getSelectedCustomers());
     container.innerHTML = list.map(c => `
       <label>
-        <input type="checkbox" value="${c}" ${checked.has(c) ? "checked" : ""} onchange="updateCount()">
+        <input type="checkbox" value="${c}" ${checked.has(c) ? "checked" : ""} onchange="clearActiveSector(); updateCount()">
         ${c.toUpperCase()}
       </label>
     `).join("");
@@ -334,6 +396,11 @@
   function updateCount() {
     const n = getSelectedCustomers().length;
     document.getElementById("sel-count").textContent = n > 0 ? `(${n} selected)` : "";
+  }
+
+  function clearActiveSector() {
+    _activeSector = null;
+    document.querySelectorAll(".sector-pill").forEach(p => p.classList.remove("active"));
   }
 
   // ── Check for pre-fill from CxO Playbook page ──
@@ -367,7 +434,7 @@
   async function ask() {
     const question     = document.getElementById("question").value.trim();
     const customer_ids = getSelectedCustomers();
-    if (!question || customer_ids.length === 0) return;
+    if (!question) return;
 
     const params   = new URLSearchParams(location.search);
     const role_prompt = params.get("role_prompt") || null;

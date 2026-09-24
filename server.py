@@ -30,7 +30,8 @@ from pydantic import BaseModel
 CHROMA_PATH  = "./chroma_db"
 COLLECTION   = "filings"
 FILINGS_DIR  = "./filings"
-TOP_K        = 5          # chunks retrieved per query
+TOP_K        = 5          # chunks retrieved per company per query
+MAX_CHUNKS   = 25         # hard cap on total chunks sent to the model
 MAX_TOKENS   = 1024
 
 SUPPORTED_MODELS = {
@@ -89,26 +90,56 @@ class AskRequest(BaseModel):
 # ---------------------------------------------------------------------------
 # Retrieval
 # ---------------------------------------------------------------------------
+def _diversify_by_period(docs: list, metas: list, target: int) -> tuple:
+    """Prefer one chunk per (company, period) before repeating any period."""
+    seen = set()
+    primary, secondary = [], []
+    for doc, meta in zip(docs, metas):
+        key = (meta.get("customer_id"), meta.get("period"))
+        if key not in seen:
+            seen.add(key)
+            primary.append((doc, meta))
+        else:
+            secondary.append((doc, meta))
+    combined = (primary + secondary)[:target]
+    return [d for d, _ in combined], [m for _, m in combined]
+
+
 def retrieve(question: str, customer_ids: list) -> tuple:
-    """Embed the query and pull top-k chunks for the given customers from Chroma."""
-    where = {"customer_id": {"$in": customer_ids}} if len(customer_ids) > 1 else {"customer_id": customer_ids[0]}
-    results = _collection.query(
+    """Embed the query and pull top-k chunks per company from Chroma, with temporal diversity."""
+    target     = MAX_CHUNKS if not customer_ids else min(TOP_K * len(customer_ids), MAX_CHUNKS)
+    n_fetch    = min(target * 2, 50)   # fetch extra candidates for diversity re-ranking
+    kwargs: dict = dict(
         query_texts=[question],
-        where=where,
-        n_results=TOP_K,
+        n_results=n_fetch,
         include=["documents", "metadatas"],
     )
-    docs  = results["documents"][0]
-    metas = results["metadatas"][0]
-    return docs, metas
+    if customer_ids:
+        kwargs["where"] = {"customer_id": {"$in": customer_ids}} if len(customer_ids) > 1 else {"customer_id": customer_ids[0]}
+    results    = _collection.query(**kwargs)
+    docs, metas = results["documents"][0], results["metadatas"][0]
+    return _diversify_by_period(docs, metas, target)
 
 
-def build_context(docs: list[str], metas: list[dict]) -> str:
-    parts = []
+def build_context(docs: list, metas: list) -> str:
+    # Group by ticker so multi-company prompts are clearly structured
+    from collections import defaultdict
+    groups: dict = defaultdict(list)
     for doc, m in zip(docs, metas):
-        header = f"[{m.get('ticker','?')} {m.get('filing_type','?')} {m.get('period','?')} — {m.get('section','?')}]"
-        parts.append(f"{header}\n{doc}")
-    return "\n\n---\n\n".join(parts)
+        groups[m.get("ticker", "?")].append((doc, m))
+
+    sections = []
+    for ticker, items in groups.items():
+        chunks = []
+        for doc, m in items:
+            header = f"[{m.get('ticker','?')} {m.get('filing_type','?')} {m.get('period','?')} — {m.get('section','?')}]"
+            chunks.append(f"{header}\n{doc}")
+        company_block = "\n\n---\n\n".join(chunks)
+        if len(groups) > 1:
+            company_block = f"## {ticker}\n\n{company_block}"
+        sections.append(company_block)
+
+    return "\n\n===\n\n".join(sections)
 
 
 # ---------------------------------------------------------------------------
@@ -141,10 +172,21 @@ async def ask(body: AskRequest):
         raise HTTPException(404, f"No filings found for the selected customers.")
 
     # 2. Build the single prompt
-    context      = build_context(docs, metas)
-    system       = SYSTEM_PROMPT
+    context  = build_context(docs, metas)
+    tickers  = sorted(set(m.get("ticker", "") for m in metas if m.get("ticker")))
+    system   = SYSTEM_PROMPT
+
+    if len(tickers) > 1:
+        comparison_prefix = (
+            f"The user is asking about multiple companies: {', '.join(tickers)}. "
+            "Structure your answer by addressing each company in turn, then synthesize "
+            "the key similarities and differences. Use a header for each company."
+        )
+        system = comparison_prefix + "\n\n" + system
+
     if body.role_prompt:
         system = body.role_prompt + "\n\n" + system
+
     user_message = f"Filing excerpts:\n\n{context}\n\n---\n\nQuestion: {body.question}"
 
     # 3. One streaming call to the model
