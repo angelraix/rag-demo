@@ -28,7 +28,6 @@ COLLECTION  = "filings"
 CHUNK_SIZE  = 400   # tokens ≈ words for rough sizing
 CHUNK_OVERLAP = 50
 
-EMBED_MODEL = "text-embedding-3-small"  # OpenAI — swap for voyage-finance-2 if preferred
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -113,16 +112,9 @@ def main():
     if not os.path.isdir(args.filings_dir):
         raise SystemExit(f"Filings directory not found: {args.filings_dir}")
 
-    api_key = os.environ.get("OPENAI_API_KEY")
-    if not api_key:
-        raise SystemExit("OPENAI_API_KEY not set in environment.")
-
     # Set up Chroma
     client = chromadb.PersistentClient(path=CHROMA_PATH)
-    ef = embedding_functions.OpenAIEmbeddingFunction(
-        api_key=api_key,
-        model_name=EMBED_MODEL,
-    )
+    ef = embedding_functions.DefaultEmbeddingFunction()
 
     if args.reset:
         try:
@@ -156,9 +148,9 @@ def main():
         print(f"   {len(sections)} section(s) detected")
 
         doc_ids, doc_texts, doc_metas = [], [], []
-        for sec_name, sec_text in sections:
+        for sec_idx, (sec_name, sec_text) in enumerate(sections):
             for i, chunk in enumerate(chunk_text(sec_text)):
-                chunk_id = f"{meta_base['customer_id']}-{meta_base['filing_type']}-{meta_base['period']}-{sec_name[:20]}-{i}"
+                chunk_id = f"{meta_base['customer_id']}-{meta_base['filing_type']}-{meta_base['period']}-s{sec_idx}-{i}"
                 # Sanitise id
                 chunk_id = re.sub(r"[^a-zA-Z0-9_\-]", "_", chunk_id)[:128]
                 doc_ids.append(chunk_id)

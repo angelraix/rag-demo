@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CxO Playbook — FilingsIQ</title>
+  <style>
+    :root {
+      --bg:        #0f1117;
+      --surface:   #1a1d27;
+      --border:    #2a2d3e;
+      --accent:    #6366f1;
+      --accent-hi: #818cf8;
+      --text:      #e2e8f0;
+      --muted:     #64748b;
+      --radius:    10px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    nav {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 16px 32px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+    }
+    .nav-logo {
+      font-size: 17px;
+      font-weight: 700;
+      color: var(--accent-hi);
+      margin-right: 20px;
+    }
+    nav a {
+      text-decoration: none;
+      color: var(--muted);
+      font-size: 14px;
+      padding: 6px 14px;
+      border-radius: 6px;
+      transition: color .15s, background .15s;
+    }
+    nav a:hover  { color: var(--text); background: var(--border); }
+    nav a.active { color: var(--text); background: var(--border); }
+
+    main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 48px 20px 56px;
+    }
+
+    .hero {
+      text-align: center;
+      margin-bottom: 12px;
+    }
+    .hero h1 {
+      font-size: 32px;
+      font-weight: 800;
+      letter-spacing: -0.6px;
+      background: linear-gradient(135deg, #e2e8f0 0%, var(--accent-hi) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 8px;
+    }
+    .hero p { color: var(--muted); font-size: 14px; margin-bottom: 28px; }
+
+    /* Customer selector */
+    .customer-bar {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 36px;
+    }
+    label {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .6px;
+    }
+    select {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      font-size: 14px;
+      padding: 8px 14px;
+      outline: none;
+      cursor: pointer;
+    }
+    select:focus { border-color: var(--accent); }
+
+    /* Role sections */
+    .roles-wrap {
+      width: 100%;
+      max-width: 880px;
+      display: flex;
+      flex-direction: column;
+      gap: 32px;
+    }
+
+    .role-section {}
+    .role-title {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+    .role-icon {
+      font-size: 22px;
+      width: 40px;
+      height: 40px;
+      border-radius: 9px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .role-name {
+      font-size: 16px;
+      font-weight: 700;
+    }
+    .role-desc {
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    /* Prompt cards */
+    .prompt-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+      gap: 12px;
+    }
+
+    .prompt-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px 18px;
+      cursor: pointer;
+      transition: border-color .15s, background .15s, transform .1s;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .prompt-card:hover {
+      border-color: var(--accent);
+      background: #1e2035;
+      transform: translateY(-1px);
+    }
+    .prompt-card:active { transform: translateY(0); }
+
+    .prompt-text {
+      font-size: 14px;
+      line-height: 1.5;
+      color: var(--text);
+    }
+    .prompt-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 4px;
+    }
+    .prompt-tag {
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-weight: 600;
+    }
+    .go-arrow {
+      font-size: 13px;
+      color: var(--muted);
+      transition: color .15s;
+    }
+    .prompt-card:hover .go-arrow { color: var(--accent-hi); }
+
+    /* Role color themes */
+    .cfo .role-icon  { background: #1e1b4b; color: #a5b4fc; }
+    .cfo .prompt-tag { background: #1e1b4b; color: #a5b4fc; }
+
+    .ceo .role-icon  { background: #052e16; color: #6ee7b7; }
+    .ceo .prompt-tag { background: #052e16; color: #6ee7b7; }
+
+    .cro .role-icon  { background: #431407; color: #fdba74; }
+    .cro .prompt-tag { background: #431407; color: #fdba74; }
+
+    .clo .role-icon  { background: #0f172a; color: #7dd3fc; }
+    .clo .prompt-tag { background: #0f172a; color: #7dd3fc; }
+
+    .ciso .role-icon  { background: #2d1b69; color: #c4b5fd; }
+    .ciso .prompt-tag { background: #2d1b69; color: #c4b5fd; }
+
+    .divider {
+      height: 1px;
+      background: var(--border);
+      width: 100%;
+      max-width: 880px;
+    }
+  </style>
+</head>
+<body>
+
+<nav>
+  <span class="nav-logo">⬡ FilingsIQ</span>
+  <a href="/">Query</a>
+  <a href="/models.html">Model Compare</a>
+  <a href="/roles.html" class="active">CxO Playbook</a>
+</nav>
+
+<main>
+  <div class="hero">
+    <h1>CxO Playbook</h1>
+    <p>One click to ask the right question for your role. Sends a role-tuned prompt to the Query page.</p>
+  </div>
+
+  <div class="customer-bar">
+    <label for="customer">Customer</label>
+    <select id="customer"></select>
+  </div>
+
+  <div class="roles-wrap" id="roles-wrap">
+    <!-- populated by JS -->
+  </div>
+</main>
+
+<script>
+  const ROLES = [
+    {
+      id: "cfo",
+      icon: "💰",
+      name: "CFO — Chief Financial Officer",
+      desc: "Revenue, margins, liquidity, capital allocation.",
+      system: "You are advising a Chief Financial Officer. Focus on: revenue trends, gross margin, operating leverage, free cash flow, debt covenants, going-concern language, and capital allocation. Be quantitative where possible.",
+      prompts: [
+        "Summarize revenue growth trends and gross margin trajectory over the reported periods.",
+        "Are there any going-concern warnings, covenant violations, or material debt risks disclosed?",
+        "What does management say about free cash flow and capital allocation priorities?",
+        "Identify any one-time charges, impairments, or non-recurring items affecting earnings.",
+        "What guidance has management provided for the next period, and how does it compare to analyst expectations?",
+      ]
+    },
+    {
+      id: "ceo",
+      icon: "🧭",
+      name: "CEO — Chief Executive Officer",
+      desc: "Strategy, growth, competitive position, market opportunity.",
+      system: "You are advising a Chief Executive Officer. Focus on: strategic initiatives, competitive differentiation, market expansion, M&A activity, management commentary on long-term vision, and key growth drivers.",
+      prompts: [
+        "What are the top strategic priorities and growth initiatives described by management?",
+        "How does management characterize the company's competitive position and moat?",
+        "Are there any M&A, partnership, or market expansion activities disclosed?",
+        "What are the biggest operational challenges or headwinds management is navigating?",
+        "Summarize the CEO letter or MD&A narrative on the company's strategic direction.",
+      ]
+    },
+    {
+      id: "cro",
+      icon: "📈",
+      name: "CRO — Chief Revenue Officer",
+      desc: "Customer concentration, demand risk, pipeline, sales.",
+      system: "You are advising a Chief Revenue Officer. Focus on: customer concentration risk, demand signals, geographic or segment revenue breakdown, pipeline commentary, pricing power, and churn or retention disclosures.",
+      prompts: [
+        "Is there significant customer concentration risk? Are any customers over 10% of revenue?",
+        "What are the disclosed revenue segments and how is each performing?",
+        "What does management say about demand trends, bookings, or pipeline health?",
+        "Are there any pricing changes, contract renegotiations, or competitive pricing pressures mentioned?",
+        "Identify any geographic revenue risks including FX headwinds or international market slowdowns.",
+      ]
+    },
+    {
+      id: "clo",
+      icon: "⚖️",
+      name: "CLO — Chief Legal Officer",
+      desc: "Litigation, regulatory, compliance, governance risk.",
+      system: "You are advising a Chief Legal Officer. Focus on: pending or threatened litigation, regulatory investigations, compliance program disclosures, related-party transactions, governance concerns, and any consent orders or settlements.",
+      prompts: [
+        "Summarize all material litigation, arbitration, and regulatory proceedings disclosed.",
+        "Are there any active government investigations, SEC inquiries, or DOJ matters mentioned?",
+        "What compliance or regulatory risks are highlighted in the risk factors section?",
+        "Identify any related-party transactions or conflicts of interest disclosed.",
+        "Are there material weaknesses in internal controls or any restatement risks flagged?",
+      ]
+    },
+    {
+      id: "ciso",
+      icon: "🔐",
+      name: "CISO — Chief Information Security Officer",
+      desc: "Cyber risk, data breaches, IT resilience, third-party risk.",
+      system: "You are advising a Chief Information Security Officer. Focus on: cybersecurity incidents disclosed, data breach notifications, third-party and supply chain risk, IT infrastructure resilience, regulatory obligations related to data security, and any SEC cyber disclosure rule compliance language.",
+      prompts: [
+        "What cybersecurity incidents, breaches, or ransomware events are disclosed in the filing?",
+        "How does the company describe its cybersecurity risk management program and governance?",
+        "Are there disclosures about third-party or supply chain cyber risks?",
+        "What data privacy regulations (GDPR, CCPA, HIPAA) are cited as material risk factors?",
+        "Has the company disclosed any material cybersecurity risks under the SEC's new cyber disclosure rules?",
+      ]
+    },
+  ];
+
+  // Load customers
+  async function loadCustomers() {
+    try {
+      const res = await fetch("/customers");
+      const { customers } = await res.json();
+      const sel = document.getElementById("customer");
+      sel.innerHTML = customers.length
+        ? customers.map(c => `<option value="${c}">${c.replace(/_/g," ").replace(/\b\w/g,l=>l.toUpperCase())}</option>`).join("")
+        : '<option value="">No customers ingested yet</option>';
+    } catch(e) { console.error(e); }
+  }
+  loadCustomers();
+
+  // Build role sections
+  const wrap = document.getElementById("roles-wrap");
+  ROLES.forEach((role, ri) => {
+    const section = document.createElement("div");
+    section.className = `role-section ${role.id}`;
+    section.innerHTML = `
+      <div class="role-title">
+        <div class="role-icon">${role.icon}</div>
+        <div>
+          <div class="role-name">${role.name}</div>
+          <div class="role-desc">${role.desc}</div>
+        </div>
+      </div>
+      <div class="prompt-grid">
+        ${role.prompts.map((p, i) => `
+          <div class="prompt-card" onclick="fire('${role.id}', ${i})">
+            <div class="prompt-text">${p}</div>
+            <div class="prompt-footer">
+              <span class="prompt-tag">${role.id.toUpperCase()}</span>
+              <span class="go-arrow">→</span>
+            </div>
+          </div>
+        `).join("")}
+      </div>
+    `;
+    wrap.appendChild(section);
+    if (ri < ROLES.length - 1) {
+      const div = document.createElement("div");
+      div.className = "divider";
+      wrap.appendChild(div);
+    }
+  });
+
+  function fire(roleId, promptIndex) {
+    const role        = ROLES.find(r => r.id === roleId);
+    const question    = role.prompts[promptIndex];
+    const customer_id = document.getElementById("customer").value;
+    const params = new URLSearchParams({
+      q:           question,
+      role:        role.name,
+      role_prompt: role.system,
+      customer:    customer_id,
+    });
+    window.location.href = "/?" + params.toString();
+  }
+</script>
+</body>
+</html>

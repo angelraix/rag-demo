@@ -16,6 +16,7 @@ import json
 import asyncio
 from typing import AsyncIterator
 
+from typing import Optional, List
 import chromadb
 from chromadb.utils import embedding_functions
 from fastapi import FastAPI, HTTPException
@@ -28,18 +29,14 @@ from pydantic import BaseModel
 # ---------------------------------------------------------------------------
 CHROMA_PATH  = "./chroma_db"
 COLLECTION   = "filings"
-EMBED_MODEL  = "text-embedding-3-small"
+FILINGS_DIR  = "./filings"
 TOP_K        = 5          # chunks retrieved per query
 MAX_TOKENS   = 1024
 
 SUPPORTED_MODELS = {
-    # Claude models
-    "claude-sonnet-5":       "anthropic",
-    "claude-haiku-4-5-20251001":      "anthropic",
-    "claude-opus-5":         "anthropic",
-    # OpenAI models
-    "gpt-4o":                "openai",
-    "gpt-4o-mini":           "openai",
+    "claude-sonnet-5":            "anthropic",
+    "claude-haiku-4-5-20251001":  "anthropic",
+    "claude-opus-5":              "anthropic",
 }
 
 SYSTEM_PROMPT = (
@@ -53,16 +50,19 @@ SYSTEM_PROMPT = (
 # ---------------------------------------------------------------------------
 # Startup — load Chroma once
 # ---------------------------------------------------------------------------
-openai_api_key    = os.environ.get("OPENAI_API_KEY", "")
 anthropic_api_key = os.environ.get("ANTHROPIC_API_KEY", "")
 
-if not openai_api_key:
-    raise SystemExit("OPENAI_API_KEY not set — needed for embeddings.")
+_ef = embedding_functions.DefaultEmbeddingFunction()
 
-_ef = embedding_functions.OpenAIEmbeddingFunction(
-    api_key=openai_api_key,
-    model_name=EMBED_MODEL,
-)
+def _scan_customer_ids() -> list:
+    ids = set()
+    if os.path.isdir(FILINGS_DIR):
+        for f in os.listdir(FILINGS_DIR):
+            if f.endswith(('.txt', '.pdf')):
+                ids.add(f.split('_')[0].lower())
+    return sorted(ids)
+
+_customer_ids = _scan_customer_ids()
 _chroma = chromadb.PersistentClient(path=CHROMA_PATH)
 _collection = _chroma.get_or_create_collection(
     name=COLLECTION,
@@ -80,20 +80,21 @@ app = FastAPI()
 # Models
 # ---------------------------------------------------------------------------
 class AskRequest(BaseModel):
-    question:    str
-    customer_id: str
-    model:       str = "claude-sonnet-5"
-    role_prompt: str | None = None   # optional CxO system-prompt addition
+    question:     str
+    customer_ids: List[str]
+    model:        str = "claude-sonnet-5"
+    role_prompt:  Optional[str] = None   # optional CxO system-prompt addition
 
 
 # ---------------------------------------------------------------------------
 # Retrieval
 # ---------------------------------------------------------------------------
-def retrieve(question: str, customer_id: str) -> tuple[list[str], list[dict]]:
-    """Embed the query and pull top-k chunks for this customer from Chroma."""
+def retrieve(question: str, customer_ids: list) -> tuple:
+    """Embed the query and pull top-k chunks for the given customers from Chroma."""
+    where = {"customer_id": {"$in": customer_ids}} if len(customer_ids) > 1 else {"customer_id": customer_ids[0]}
     results = _collection.query(
         query_texts=[question],
-        where={"customer_id": customer_id},
+        where=where,
         n_results=TOP_K,
         include=["documents", "metadatas"],
     )
@@ -126,24 +127,6 @@ async def stream_anthropic(model: str, system: str, user_message: str) -> AsyncI
             yield text
 
 
-async def stream_openai(model: str, system: str, user_message: str) -> AsyncIterator[str]:
-    from openai import OpenAI
-    client = OpenAI(api_key=openai_api_key)
-    with client.chat.completions.create(
-        model=model,
-        max_tokens=MAX_TOKENS,
-        stream=True,
-        messages=[
-            {"role": "system",  "content": system},
-            {"role": "user",    "content": user_message},
-        ],
-    ) as stream:
-        for chunk in stream:
-            delta = chunk.choices[0].delta.content
-            if delta:
-                yield delta
-
-
 # ---------------------------------------------------------------------------
 # /ask endpoint
 # ---------------------------------------------------------------------------
@@ -153,9 +136,9 @@ async def ask(body: AskRequest):
         raise HTTPException(400, f"Unsupported model: {body.model}")
 
     # 1. Retrieve relevant chunks (preprocessing — not counted as "the API call")
-    docs, metas = retrieve(body.question, body.customer_id)
+    docs, metas = retrieve(body.question, body.customer_ids)
     if not docs:
-        raise HTTPException(404, f"No filings found for customer '{body.customer_id}'.")
+        raise HTTPException(404, f"No filings found for the selected customers.")
 
     # 2. Build the single prompt
     context      = build_context(docs, metas)
@@ -165,16 +148,10 @@ async def ask(body: AskRequest):
     user_message = f"Filing excerpts:\n\n{context}\n\n---\n\nQuestion: {body.question}"
 
     # 3. One streaming call to the model
-    provider = SUPPORTED_MODELS[body.model]
-
     async def event_stream():
         try:
-            if provider == "anthropic":
-                async for token in stream_anthropic(body.model, system, user_message):
-                    yield token
-            else:
-                async for token in stream_openai(body.model, system, user_message):
-                    yield token
+            async for token in stream_anthropic(body.model, system, user_message):
+                yield token
         except Exception as e:
             yield f"\n\n[ERROR: {e}]"
 
@@ -186,13 +163,7 @@ async def ask(body: AskRequest):
 # ---------------------------------------------------------------------------
 @app.get("/customers")
 def customers():
-    try:
-        # Peek at the collection metadata to get distinct customer_ids
-        results = _collection.get(limit=2000, include=["metadatas"])
-        ids = sorted(set(m["customer_id"] for m in results["metadatas"]))
-        return {"customers": ids}
-    except Exception:
-        return {"customers": []}
+    return {"customers": _customer_ids}
 
 
 # ---------------------------------------------------------------------------

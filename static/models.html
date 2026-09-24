@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Model Compare — FilingsIQ</title>
+  <style>
+    :root {
+      --bg:        #0f1117;
+      --surface:   #1a1d27;
+      --border:    #2a2d3e;
+      --accent:    #6366f1;
+      --accent-hi: #818cf8;
+      --text:      #e2e8f0;
+      --muted:     #64748b;
+      --green:     #10b981;
+      --radius:    10px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    nav {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 16px 32px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+    }
+    .nav-logo {
+      font-size: 17px;
+      font-weight: 700;
+      color: var(--accent-hi);
+      margin-right: 20px;
+    }
+    nav a {
+      text-decoration: none;
+      color: var(--muted);
+      font-size: 14px;
+      padding: 6px 14px;
+      border-radius: 6px;
+      transition: color .15s, background .15s;
+    }
+    nav a:hover  { color: var(--text); background: var(--border); }
+    nav a.active { color: var(--text); background: var(--border); }
+
+    main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 48px 20px 40px;
+    }
+
+    .hero {
+      text-align: center;
+      margin-bottom: 36px;
+    }
+    .hero h1 {
+      font-size: 32px;
+      font-weight: 800;
+      letter-spacing: -0.6px;
+      background: linear-gradient(135deg, #e2e8f0 0%, var(--accent-hi) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 8px;
+    }
+    .hero p { color: var(--muted); font-size: 14px; }
+
+    /* Query bar */
+    .query-bar {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 22px 24px;
+      width: 100%;
+      max-width: 900px;
+      margin-bottom: 24px;
+    }
+    .query-bar .top-row {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 14px;
+      flex-wrap: wrap;
+    }
+    .field { display: flex; flex-direction: column; gap: 6px; }
+    label {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .6px;
+    }
+    select {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      font-size: 14px;
+      padding: 8px 12px;
+      outline: none;
+      cursor: pointer;
+    }
+    select:focus { border-color: var(--accent); }
+
+    textarea {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      font-size: 15px;
+      padding: 12px 14px;
+      resize: vertical;
+      min-height: 72px;
+      outline: none;
+      font-family: inherit;
+      line-height: 1.5;
+    }
+    textarea:focus { border-color: var(--accent); }
+    textarea::placeholder { color: var(--muted); }
+
+    .btn-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 14px;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    .model-toggles {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .toggle {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 6px 12px;
+      cursor: pointer;
+      font-size: 13px;
+      color: var(--muted);
+      transition: border-color .15s, color .15s;
+      user-select: none;
+    }
+    .toggle input { display: none; }
+    .toggle.checked {
+      border-color: var(--accent);
+      color: var(--text);
+    }
+    .toggle .dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: var(--border);
+    }
+    .toggle.checked .dot { background: var(--accent-hi); }
+
+    button {
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: 7px;
+      font-size: 14px;
+      font-weight: 600;
+      padding: 10px 24px;
+      cursor: pointer;
+      transition: background .15s, opacity .15s;
+    }
+    button:hover:not(:disabled) { background: var(--accent-hi); }
+    button:disabled { opacity: .45; cursor: not-allowed; }
+
+    /* Results grid */
+    .results-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 16px;
+      width: 100%;
+      max-width: 900px;
+    }
+
+    .model-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .model-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .model-name {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--accent-hi);
+    }
+    .model-meta {
+      font-size: 11px;
+      color: var(--muted);
+    }
+    .status-badge {
+      font-size: 11px;
+      padding: 3px 8px;
+      border-radius: 12px;
+      font-weight: 600;
+    }
+    .status-badge.waiting  { background: #1e1b4b; color: #a5b4fc; }
+    .status-badge.running  { background: #052e16; color: #6ee7b7; }
+    .status-badge.done     { background: #1e293b; color: var(--muted); }
+    .status-badge.error    { background: #450a0a; color: #fca5a5; }
+
+    .model-answer {
+      font-size: 14px;
+      line-height: 1.7;
+      white-space: pre-wrap;
+      color: var(--text);
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 14px;
+      min-height: 80px;
+      flex: 1;
+    }
+
+    .timing {
+      font-size: 11px;
+      color: var(--muted);
+      text-align: right;
+    }
+
+    /* Speed pulse on running cards */
+    @keyframes borderPulse {
+      0%,100% { border-color: var(--border); }
+      50%      { border-color: var(--accent); }
+    }
+    .model-card.running { animation: borderPulse 1.4s ease-in-out infinite; }
+  </style>
+</head>
+<body>
+
+<nav>
+  <span class="nav-logo">⬡ FilingsIQ</span>
+  <a href="/">Query</a>
+  <a href="/models.html" class="active">Model Compare</a>
+  <a href="/roles.html">CxO Playbook</a>
+</nav>
+
+<main>
+  <div class="hero">
+    <h1>Model Comparison</h1>
+    <p>Same query. Same context. Pick two models. Watch them race.</p>
+  </div>
+
+  <div class="query-bar">
+    <div class="top-row">
+      <div class="field">
+        <label>Customer</label>
+        <select id="customer"></select>
+      </div>
+    </div>
+    <div class="field">
+      <label>Question</label>
+      <textarea id="question" placeholder="What are the main risk factors for this company?"></textarea>
+    </div>
+    <div class="btn-row">
+      <div class="model-toggles" id="model-toggles">
+        <!-- populated by JS -->
+      </div>
+      <button id="run-btn" onclick="runAll()">Compare Models →</button>
+    </div>
+  </div>
+
+  <div class="results-grid" id="results-grid"></div>
+</main>
+
+<script>
+  const MODELS = [
+    { id: "claude-haiku-4-5-20251001", label: "Claude Haiku 4.5", provider: "Anthropic", default: true  },
+    { id: "claude-sonnet-5",           label: "Claude Sonnet 5",  provider: "Anthropic", default: true  },
+    { id: "claude-opus-5",             label: "Claude Opus 5",    provider: "Anthropic", default: false },
+  ];
+
+  // Build toggle checkboxes — max 2 selected
+  const togglesEl = document.getElementById("model-toggles");
+  MODELS.forEach(m => {
+    const label = document.createElement("label");
+    label.className = "toggle" + (m.default ? " checked" : "");
+    label.dataset.model = m.id;
+    label.innerHTML = `<input type="checkbox" ${m.default ? "checked" : ""}><span class="dot"></span>${m.label}`;
+    label.addEventListener("click", e => {
+      e.preventDefault();
+      const isChecked = label.classList.contains("checked");
+      if (isChecked) {
+        label.classList.remove("checked");
+      } else {
+        const checked = [...document.querySelectorAll(".toggle.checked")];
+        if (checked.length >= 2) checked[0].classList.remove("checked");
+        label.classList.add("checked");
+      }
+    });
+    togglesEl.appendChild(label);
+  });
+
+  // Load customers
+  async function loadCustomers() {
+    try {
+      const res = await fetch("/customers");
+      const { customers } = await res.json();
+      const sel = document.getElementById("customer");
+      sel.innerHTML = customers.length
+        ? customers.map(c => `<option value="${c}">${c.replace(/_/g," ").replace(/\b\w/g,l=>l.toUpperCase())}</option>`).join("")
+        : '<option value="">No customers ingested yet</option>';
+    } catch(e) { console.error(e); }
+  }
+  loadCustomers();
+
+  function selectedModels() {
+    return [...document.querySelectorAll(".toggle.checked")].map(el => el.dataset.model);
+  }
+
+  async function runAll() {
+    const question    = document.getElementById("question").value.trim();
+    const customer_id  = document.getElementById("customer").value;
+    const customer_ids = [customer_id];
+    const models       = selectedModels();
+    if (!question || !customer_id || models.length === 0) return;
+
+    const btn  = document.getElementById("run-btn");
+    const grid = document.getElementById("results-grid");
+    btn.disabled = true;
+    grid.innerHTML = "";
+
+    // Create a card for each selected model
+    const cards = {};
+    models.forEach(modelId => {
+      const info  = MODELS.find(m => m.id === modelId);
+      const card  = document.createElement("div");
+      card.className = "model-card";
+      card.id = "card-" + modelId;
+      card.innerHTML = `
+        <div class="model-header">
+          <div>
+            <div class="model-name">${info?.label || modelId}</div>
+            <div class="model-meta">${info?.provider || ""}</div>
+          </div>
+          <span class="status-badge waiting" id="badge-${modelId}">Waiting</span>
+        </div>
+        <div class="model-answer" id="ans-${modelId}"></div>
+        <div class="timing" id="time-${modelId}"></div>
+      `;
+      grid.appendChild(card);
+      cards[modelId] = card;
+    });
+
+    // Fire all requests in parallel — each is one /ask call
+    await Promise.all(models.map(modelId => streamModel(modelId, question, customer_ids)));
+    btn.disabled = false;
+  }
+
+  async function streamModel(modelId, question, customer_ids) {
+    const card    = document.getElementById("card-" + modelId);
+    const badge   = document.getElementById("badge-" + modelId);
+    const ansEl   = document.getElementById("ans-" + modelId);
+    const timeEl  = document.getElementById("time-" + modelId);
+
+    badge.className = "status-badge running";
+    badge.textContent = "Running";
+    card.classList.add("running");
+    const t0 = Date.now();
+
+    try {
+      const res = await fetch("/ask", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question, customer_ids, model: modelId })
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: res.statusText }));
+        ansEl.textContent = "Error: " + (err.detail || res.statusText);
+        badge.className = "status-badge error";
+        badge.textContent = "Error";
+        card.classList.remove("running");
+        return;
+      }
+
+      const reader  = res.body.getReader();
+      const decoder = new TextDecoder();
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        ansEl.textContent += decoder.decode(value, { stream: true });
+      }
+
+      const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
+      timeEl.textContent = `⏱ ${elapsed}s`;
+      badge.className = "status-badge done";
+      badge.textContent = "Done";
+    } catch(e) {
+      ansEl.textContent = "Network error: " + e.message;
+      badge.className = "status-badge error";
+      badge.textContent = "Error";
+    }
+
+    card.classList.remove("running");
+  }
+
+  document.getElementById("question").addEventListener("keydown", e => {
+    if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) runAll();
+  });
+</script>
+</body>
+</html>
